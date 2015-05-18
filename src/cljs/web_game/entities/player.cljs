@@ -14,6 +14,8 @@
           :style {:position "absolute"
                   :bottom (u/percent-to-pixels :y 8.5)
                   :left (u/percent-to-pixels :x 47.5)
+                  :width "64px"
+                  :height "59px"
                   :vx 0
                   :vy 0}}]))
 

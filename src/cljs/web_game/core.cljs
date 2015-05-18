@@ -3,6 +3,7 @@
   (:require [reagent.core :as r]
             [web-game.entities.player :refer [player]]
             [web-game.entities.enemy :refer [enemy]]
+            [web-game.entities.simple-bullet :refer [simple-bullet]]
             [web-game.input :refer [initialize-input]]
             [web-game.utilities :as u]
             [cljs.core.async
@@ -12,7 +13,7 @@
 (initialize-input)
 
 (defn entities [entities-vector]
-  (into [] (cons :div (map deref @entities-vector))))
+  (into [] (cons :div (cons {:id "game"} (map deref @entities-vector)))))
 
 (def root (.getElementById js/document "root"))
 
@@ -25,4 +26,5 @@
   (reset! u/entities-vector [])
   (u/add-entity player)
   (u/add-entity enemy)
+  (u/add-bullet-type :simple simple-bullet)
   (mount-root))
