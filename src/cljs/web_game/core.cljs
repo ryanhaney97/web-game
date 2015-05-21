@@ -13,7 +13,7 @@
 (initialize-input)
 
 (defn entities [entities-vector]
-  (into [] (cons :div (cons {:id "game"} (map deref @entities-vector)))))
+  (into [] (cons :div (cons {:id "game"} @entities-vector))))
 
 (def root (.getElementById js/document "root"))
 

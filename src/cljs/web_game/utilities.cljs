@@ -12,10 +12,26 @@
 
 (def frame (atom 0))
 
-(defn add-entity [entity]
-  (if (coll? entity)
-    (swap! entities-vector conj (r/atom entity))
-    (swap! entities-vector conj entity)))
+(defn get-external-property [e property]
+  (let [css-map (second e)]
+    (if (map? css-map)
+      (get css-map property)
+      nil)))
+
+(defn get-property [e property]
+  (let [css-map (second e)]
+    (if (map? css-map)
+      (get-in css-map [:style property])
+      nil)))
+
+(defn add-entity [entity & args]
+  (swap! entities-vector conj (apply (get-property entity :init) entity args)))
+
+(defn remove-entity [entity]
+  (swap! entities-vector (partial map #(if (= entity %1)
+                                         nil
+                                         %1)))
+  (swap! entities-vector (partial filter identity)))
 
 (defn add-bullet-type [bullet-key bullet-ns]
   (swap! bullet-types assoc bullet-key bullet-ns))
@@ -24,7 +40,15 @@
   (let [css-map (second e)]
     (if (map? css-map)
       (let [new-css (assoc-in css-map [:style attribute] value)]
-        (into [] (concat [(first e) new-css] (rest (rest e))))))))
+        (into [] (concat [(first e) new-css] (rest (rest e)))))
+      e)))
+
+(defn change-external-attribute [e attribute value]
+  (let [css-map (second e)]
+    (if (map? css-map)
+      (let [new-css (assoc css-map attribute value)]
+        (into [] (concat [(first e) new-css] (rest (rest e)))))
+      e)))
 
 (defn move-element [e]
   (let [css-map (second e)]
@@ -43,7 +67,7 @@
   (let [axis-length (if (= :x axis) (* (.-innerWidth js/window) 0.8) (.-innerHeight js/window))]
     (str (int (* axis-length (/ percentage 100))) "px")))
 
-(defn change-velocity [e vx vy]
+(defn change-entity-velocity [id e vx vy & args]
   (let [css-map (second e)]
     (if (map? css-map)
       (let [new-css (-> css-map
@@ -58,12 +82,6 @@
 
 (def get-velocity-x (get-velocity :vx))
 (def get-velocity-y (get-velocity :vy))
-
-(defn get-property [e property]
-  (let [css-map (second e)]
-    (if (map? css-map)
-      (get-in css-map [:style property])
-      nil)))
 
 (defn timeout [ms]
   (let [c (chan)]
@@ -83,8 +101,48 @@
            (swap! closed? not)))))
     c))
 
+(defn on-loop [entity]
+  (let [loop-fn (get-property entity :on-loop)]
+    (if loop-fn
+      (loop-fn entity)
+      entity)))
+
 (defn on-frame []
-  (dorun (map #(swap! %1 move-element) @entities-vector)))
+  (swap! entities-vector (partial map on-loop))
+  (swap! entities-vector (partial map move-element))
+  (swap! entities-vector (partial sort-by #(get-property %1 :priority))))
+
+(defn- sub-change-entity [id func entity & args]
+  (if (= (:id (second entity)) id)
+    (let [result (apply func id entity args)]
+      result)
+    entity))
+
+(defn change-entity [id func & args]
+  (swap! entities-vector (partial mapv #(apply sub-change-entity id func %1 args))))
+
+(defn get-entity-by-id [id]
+  (first (filter #(= (get-external-property %1 :id) id) @entities-vector)))
+
+(defn load-dimensions [id entity & args]
+  (let [e (.getElementById js/document id)
+        width (.-width e)
+        height (.-height e)
+        middle {:x (/ width 2) :y (/ height 2)}
+        result (-> entity
+                   (change-attribute :width width)
+                   (change-attribute :height height)
+                   (change-attribute :middle middle))]
+    result))
+
+(defn get-id [entity]
+  (get-external-property entity :id))
+
+(defn change-velocity [e vx vy]
+  (change-entity (get-id e) change-entity-velocity vx vy))
+
+(defn get-center [entity]
+  {:x (+ (:x (get-property entity :middle)) (get-property entity :left)) :y (+ (:y (get-property entity :middle)) (get-property entity :bottom))})
 
 (go
  (while true
@@ -95,4 +153,4 @@
 (defn spawn-bullet [bullet-key & args]
   (let [bullet (get @bullet-types bullet-key)]
     (if bullet
-      (add-entity (apply (get-property bullet :init) args)))))
+      (apply add-entity bullet args))))
