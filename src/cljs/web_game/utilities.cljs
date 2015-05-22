@@ -4,7 +4,7 @@
    [reagent.core :as r]
    [cljs.core.async
     :as a
-    :refer [>! <! chan close!]]))
+    :refer [>! <! chan close! take!]]))
 
 (def entities-vector (r/atom []))
 
@@ -107,10 +107,44 @@
       (loop-fn entity)
       entity)))
 
+(defn get-id [entity]
+  (get-external-property entity :id))
+
+(defn get-center [entity]
+  {:x (+ (:x (js/parseFloat (get-property entity :middle))) (js/parseFloat (get-property entity :left))) :y (+ (:y (js/parseFloat (get-property entity :middle))) (js/parseFloat (get-property entity :bottom)))})
+
+(def get-distance
+  (memoize
+   (fn [point1 point2]
+     (let [x1 (:x point1)
+           y1 (:y point1)
+           x2 (:x point2)
+           y2 (:y point2)
+           delta-x (.abs js/Math (- x1 x2))
+           delta-y (.abs js/Math (- y1 y2))
+           x-squared (.pow js/Math delta-x 2)
+           y-squared (.pow js/Math delta-y 2)
+           distance (.sqrt js/Math (+ x-squared y-squared))]
+       distance))))
+
+(defn colliding? [entity1 entity2]
+  (let [point1 (get-center entity1)
+        point2 (get-center entity2)
+        distance (get-distance point1 point2)
+        colliding-distance (+ (get-property entity1 :hitbox) (get-property entity2 :hitbox))]
+    (<= distance colliding-distance)))
+
+(defn get-collisions [entity]
+  (let [result (chan)]
+    (go
+     (>! result (filter #(not= (get-id entity) (get-id %1)) (filter (partial colliding? entity) @entities-vector))))
+    result))
+
 (defn on-frame []
-  (swap! entities-vector (partial map on-loop))
-  (swap! entities-vector (partial map move-element))
-  (swap! entities-vector (partial sort-by #(get-property %1 :priority))))
+  (go
+   (doall (swap! entities-vector (partial map on-loop)))
+   (doall (swap! entities-vector (partial map move-element)))
+   (doall (swap! entities-vector (partial sort-by #(get-property %1 :priority))))))
 
 (defn- sub-change-entity [id func entity & args]
   (if (= (:id (second entity)) id)
@@ -135,20 +169,35 @@
                    (change-attribute :middle middle))]
     result))
 
-(defn get-id [entity]
-  (get-external-property entity :id))
-
 (defn change-velocity [e vx vy]
   (change-entity (get-id e) change-entity-velocity vx vy))
-
-(defn get-center [entity]
-  {:x (+ (:x (get-property entity :middle)) (get-property entity :left)) :y (+ (:y (get-property entity :middle)) (get-property entity :bottom))})
 
 (go
  (while true
    (<! (timeout 16.67))
    (swap! frame inc)
    (on-frame)))
+
+(defn handle-collision [entity1 entity2]
+  (go
+   (let [collision-func (get-property entity2 :on-collision)]
+     (if (fn? collision-func)
+       (collision-func entity2 entity1))))
+  entity2)
+
+(defn handle-collisions [entity collisions]
+  (let [collision-func (get-property entity :on-collision)]
+    (if (fn? collision-func)
+      (collision-func entity collisions)))
+  (doall (map (partial handle-collision entity) collisions)))
+
+(go
+ (while true
+   (<! (wait 3))
+   (let [player (get-entity-by-id "player")
+         collisions (<! (get-collisions player))]
+     (if (not (empty? collisions))
+       (handle-collisions player collisions)))))
 
 (defn spawn-bullet [bullet-key & args]
   (let [bullet (get @bullet-types bullet-key)]

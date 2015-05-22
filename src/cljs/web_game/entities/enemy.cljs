@@ -8,7 +8,7 @@
     :refer [>! <! chan sub]]))
 
 (defn init [entity & args]
-  (let [id (gensym "enemy")
+  (let [id (str (gensym "enemy"))
         enemy (-> entity
                   (u/change-external-attribute :id id)
                   (u/change-external-attribute :on-load (partial u/change-entity id u/load-dimensions)))]
@@ -27,9 +27,8 @@
          :style {:position "absolute"
                  :bottom (u/percent-to-pixels :y 100)
                  :left (u/percent-to-pixels :x 47.5)
-                 :width "42px"
-                 :height "44px"
                  :priority 2
                  :init init
+                 :hitbox 5
                  :vx 0
                  :vy 0}}])

@@ -10,8 +10,6 @@
              :as a
              :refer [>! <! chan]]))
 
-(initialize-input)
-
 (defn entities [entities-vector]
   (into [] (cons :div (cons {:id "game"} @entities-vector))))
 
@@ -23,6 +21,7 @@
   (r/render [entities u/entities-vector] root))
 
 (defn ^:export init! []
+  (initialize-input)
   (reset! u/entities-vector [])
   (u/add-entity player)
   (u/add-entity enemy)

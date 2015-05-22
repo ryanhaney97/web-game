@@ -37,6 +37,7 @@
                  :left (u/percent-to-pixels :x 47.5)
                  :vx 0
                  :vy 0
+                 :hitbox 19
                  :priority 3
                  :init init
                  :bullet :simple

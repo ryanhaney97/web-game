@@ -14,15 +14,51 @@
         (u/change-external-attribute :id id)
         (u/change-external-attribute :on-load (partial u/change-entity id u/load-dimensions)))))
 
+(defn flicker
+  [amount id]
+  (let [c (chan)]
+    (go
+     (loop [current-amount 0]
+       (<! (u/wait 1))
+       (let [entity (u/get-entity-by-id id)
+             visible? (= (u/get-property entity :visibility) "visible")]
+         (if visible?
+           (u/change-entity id #(u/change-attribute %2 :visibility "hidden"))
+           (u/change-entity id #(u/change-attribute %2 :visibility "visible")))
+         (if (<= amount current-amount)
+           (do
+             (u/change-entity id #(u/change-attribute %2 :visibility "visible"))
+             (>! c ""))
+           (recur (inc current-amount))))))
+    c))
+
+(defn pichun []
+  (go
+   (u/change-entity "player" #(u/change-attribute %2 :invulnerable? true))
+   (u/change-entity "player" #(u/change-attribute %2 :visibility "hidden"))
+   (<! (u/wait 60))
+   (u/change-entity "player" #(u/change-attribute %2 :bottom (u/percent-to-pixels :y 8.5)))
+   (u/change-entity "player" #(u/change-attribute %2 :left (u/percent-to-pixels :x 47.5)))
+   (u/change-entity "player" #(u/change-attribute %2 :visibility "visible"))
+   (<! (flicker 120 "player"))
+   (u/change-entity "player" #(u/change-attribute %2 :invulnerable? false))))
+
+(defn on-collision [player collisions]
+  (let [bullets (filter #(u/get-property %1 :bullet) collisions)]
+    (if (not (or (empty? bullets) (u/get-property player :invulnerable?)))
+      (pichun))))
+
 (def player
   [:img {:src "images/player.png"
          :style {:position "absolute"
                  :bottom (u/percent-to-pixels :y 8.5)
                  :left (u/percent-to-pixels :x 47.5)
-                 :width "64px"
-                 :height "59px"
                  :priority 1
                  :init init
+                 :hitbox 7
+                 :visiblility "visible"
+                 :invulnerable? false
+                 :on-collision on-collision
                  :vx 0
                  :vy 0}}])
 
